@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lineage 2 - JS</title>
+    <link rel="icon" type="image/x-icon" href="favicon.png">
+    <link rel="stylesheet" href="bin/client.bundle.css">
+</head>
+
+<style>
+    * { overflow: hidden; }
+
+    .loading {
+        width: 100%;
+        height: 100%;
+        display: block;
+        position: absolute;
+        z-index: 1;
+        background-color: #131313;
+        top: 0;
+        left: 0;
+    }
+
+    .loading>.logo {
+        width: 50%;
+        left: 50%;
+        top: 50%;
+        position: absolute;
+        transform: translate(-50%, -50%);
+        opacity: 0;
+    }
+
+    .loading>.logo>img {
+        width: 100%;
+        height: auto;
+    }
+
+    body[loading=false] .loading {
+        display: none;
+    }
+</style>
+
+<script type="application/javascript">
+    function triggerResize() {
+        window.dispatchEvent(new Event("resize"));
+    }
+</script>
+
+<body loading style="background-color: #131313">
+    <div class="loading">
+        <div class="logo partial">
+            <img src="logo.png" width="1000" height="800" />
+        </div>
+        <div class="logo dynamic">
+            <img src="logo.png" width="1000" height="800" alt="Loading" />
+        </div>
+    </div>
+    <viewport></viewport>
+    <a class="github" href="https://github.com/realratchet/Lineage2JS" target="_blank">Lineage2JS @ github</a>
+    <span class="audio material-symbols-outlined">volume_off</span>
+</body>
+
+<script type="application/javascript" src="bin/client.bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link
+    href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap"
+    rel="stylesheet">
+<link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+    onload="triggerResize();" />
+
+
+</html>

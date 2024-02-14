@@ -1,0 +1,4 @@
+body{padding:0;margin:0;width:100%;height:100%;position:absolute;display:block;background-color:transparent;font-family:"Roboto", sans-serif;font-style:normal;-webkit-user-select:none;-ms-user-select:none;user-select:none}body viewport,body .loading{width:100%;height:100%;display:block}body .loading{position:absolute;z-index:1;background-color:#131313}body .loading .logo{width:50%;left:50%;top:50%;position:absolute;transform:translate(-50%, -50%)}body .loading .logo.partial{opacity:0.1}body .loading .logo.dynamic{clip-path:rect(0 0 0 0);opacity:1}body a.github,body .audio{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);text-decoration:none;color:white;font-size:large}body .audio{left:90%;font-size:5em}body a.github:hover{text-decoration:underline;font-weight:700}body a.github:hover,body .audio:hover{color:lightblue;cursor:pointer}
+
+
+/*# sourceMappingURL=client.bundle.css.map*/

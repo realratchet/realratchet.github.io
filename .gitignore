@@ -1,0 +1,10 @@
+node_modules/
+/assets-c4*
+.vscode/tasks.json
+/build/*
+*cpp/
+cpp/l2_viewer/
+cpp/ue_viewer/
+cpp/l2_editor/
+*.log
+asset-list.json
