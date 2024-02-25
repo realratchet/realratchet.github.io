@@ -26,6 +26,7 @@
         "buffer": "^6.0.3",
         "copy-webpack-plugin": "^10.2.4",
         "css-loader": "^6.10.0",
+        "dotenv": "^16.4.5",
         "node-sass": "^9.0.0",
         "path-browserify": "^1.0.1",
         "raw-loader": "^4.0.2",

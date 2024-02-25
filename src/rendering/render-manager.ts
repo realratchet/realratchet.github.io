@@ -2,7 +2,7 @@ import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeomet
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 import Stats from "./stats";
-// import { DeviceOrientationControls } from "./device-orientation-controls";
+import { DeviceOrientationControls } from "./device-orientation-controls";
 
 const stats = new (Stats as any)(0);
 
@@ -14,7 +14,7 @@ const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
-type DeviceOrientationControls = import ("./device-orientation-controls").DeviceOrientationControls;
+// type DeviceOrientationControls = import ("./device-orientation-controls").DeviceOrientationControls;
 
 class RenderManager {
     public readonly renderer: THREE.WebGLRenderer;
@@ -40,6 +40,8 @@ class RenderManager {
     protected readonly frustum = new Frustum();
     protected readonly lastProjectionScreenMatrix = new Matrix4();
 
+    protected hasGyroControls = false;
+
     constructor(viewport: HTMLViewportElement) {
         this.viewport = viewport;
         this.renderer = new WebGLRenderer({
@@ -51,12 +53,17 @@ class RenderManager {
         });
 
         this.renderer.autoClear = false;
+        this.hasGyroControls = false;
         this.supportsDDS = this.renderer.extensions.has("WEBGL_compressed_texture_s3tc");
 
         this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
-        // this.controls.orient = new DeviceOrientationControls(this.camera);
-        // if (!this.controls.orient.enabled)
         this.controls.fps = new PointerLockControls(this.camera, this.renderer.domElement);
+        this.controls.orient = new DeviceOrientationControls(this.camera, Math.PI, () => {
+            this.hasGyroControls = true;
+            this.controls.fps.unlock();
+        });
+        this.controls.orient.alphaOffset = Math.PI;
+
         this.camera.position.set(0, 5, 15);
         this.camera.lookAt(0, 0, 0);
         this.scene.add(new Mesh(new BoxBufferGeometry()));
@@ -160,7 +167,10 @@ class RenderManager {
     }
 
     public onHandleMouseUp(event: MouseEvent) { }
-    public onHandleMouseDown(event: MouseEvent) { this.controls.fps?.lock(); }
+    public onHandleMouseDown(event: MouseEvent) {
+        if (!this.hasGyroControls)
+            this.controls.fps?.lock();
+    }
 
     public setSize(width: number, height: number, updateStyle?: boolean) {
         this.pixelRatio = global.devicePixelRatio;
@@ -177,6 +187,7 @@ class RenderManager {
         const { width, height } = this.viewport.getBoundingClientRect();
 
         this.camera.aspect = width / height;
+
         this.camera.updateProjectionMatrix();
         this.setSize(width, height);
         this.getDomElement().style.display = oldStyle;
@@ -276,6 +287,8 @@ class RenderManager {
 
     protected _preRender(currentTime: number, deltaTime: number) {
         this.mixer.update(deltaTime / 1000);
+        if (this.hasGyroControls)
+            this.controls.orient?.update();
 
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);

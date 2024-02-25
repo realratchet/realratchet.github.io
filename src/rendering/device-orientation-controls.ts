@@ -30,7 +30,7 @@ class DeviceOrientationControls extends EventDispatcher {
     public update: () => void;
     public dispose: () => void;
 
-    constructor(object: THREE.Object3D) {
+    constructor(object: THREE.Object3D, alphaOffset: number = 0, onGyroFound: Function = null) {
 
         super();
 
@@ -53,17 +53,29 @@ class DeviceOrientationControls extends EventDispatcher {
         this.deviceOrientation = {};
         this.screenOrientation = 0;
 
-        this.alphaOffset = 0; // radians
+        this.alphaOffset = alphaOffset; // radians
 
-        const onDeviceOrientationChangeEvent = function (event: any) {
+        let gyroFoundCalled = false;
+
+        const onDeviceOrientationChangeEvent = function (event: DeviceOrientationEvent) {
 
             scope.deviceOrientation = event;
+
+            if (!gyroFoundCalled && event.alpha && event.beta && event.gamma) {
+                gyroFoundCalled = true;
+                onGyroFound();
+            }
 
         };
 
         const onScreenOrientationChangeEvent = function () {
 
-            scope.screenOrientation = window.orientation || 0;
+            scope.screenOrientation = screen.orientation.angle || 0;
+
+            if (!gyroFoundCalled && screen.orientation.angle !== 0) {
+                gyroFoundCalled = true;
+                onGyroFound();
+            }
 
         };
 

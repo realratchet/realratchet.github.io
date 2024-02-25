@@ -1,5 +1,8 @@
+const fs = require("fs");
 const path = require("path");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+
+require('dotenv').config()
 
 function createModuleConfig({ name, resolve, entry: _entry, library }) {
     return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats }) {
@@ -90,6 +93,15 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             }
         });
 
+        const httpsSettings = process.env.HTTPS_KEY && process.env.HTTPS_CERT && process.env.HTTPS_CA
+            ? {
+                https: {
+                    key: process.env.HTTPS_KEY,
+                    cert: process.env.HTTPS_CERT,
+                    ca: process.env.HTTPS_CA,
+                }
+            } : {};
+
         return {
             entry,
             mode,
@@ -109,7 +121,8 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                 static: {
                     directory: path.resolve(__dirname, ".."),
                     publicPath: ""
-                }
+                },
+                ...httpsSettings
             },
             devtool,
             context: __dirname,

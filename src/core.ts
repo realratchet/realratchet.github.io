@@ -164,9 +164,11 @@ function decompile(obj: DataView, iter: [number]): any {
 class Tracker {
     public trackers = new Array<number>();
     public element: HTMLDivElement;
+    protected minTrackers: number;
 
-    public constructor(elem: HTMLDivElement) {
+    public constructor(elem: HTMLDivElement, min: number = 0) {
         this.element = elem;
+        this.minTrackers = min;
 
         global.addEventListener("resize", this.onHandleResize.bind(this));
     }
@@ -185,7 +187,7 @@ class Tracker {
     protected redraw() {
         const prog = this.trackers.length === 0
             ? 0
-            : (this.trackers.reduce((acc, v) => acc + v, 0) / this.trackers.length * 100);
+            : (this.trackers.reduce((acc, v) => acc + v, 0) / Math.max(this.trackers.length, this.minTrackers) * 100);
 
         this.element.style.clipPath = `rect(0px ${prog}% 100% 0px)`;
     }
