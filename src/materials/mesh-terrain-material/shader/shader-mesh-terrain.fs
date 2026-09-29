@@ -21,6 +21,11 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
+uniform sampler2D shadowMap;
+uniform float shadowDarkness;
+uniform float shadowActive;
+varying vec4 vShadowCoord;
+
 #ifdef USE_UV_TEXTURE
     #pragma params_include_layers
 
@@ -37,10 +42,8 @@ void main() {
     #include <logdepthbuf_fragment>
 
     #ifdef USE_UV_TEXTURE
-        // vec2 uv;
         vec4 layer, layerMask;
-        vec4 texelDiffuse;
-
+        vec4 texelDiffuse = vec4(1.0);
         #pragma include_layers
     #else
         vec4 texelDiffuse = vec4(1.0);
@@ -49,25 +52,28 @@ void main() {
     diffuseColor.rgb *= texelDiffuse.rgb;
 
     #include <color_fragment>
-    
 
-    // #include <alphamap_fragment>
-
+    // D3DTOP_MODULATE2X: ATerrainInfo::Render (0x9bdfb8) passes EnableLighting Modulate2X=1
+    diffuseColor.rgb *= 2.0;
 
     #include <alphatest_fragment>
-    // #include <specularmap_fragment>
     ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
-    // accumulation (baked indirect lighting only)
     #ifdef USE_LIGHTMAP
         vec4 lightMapTexel= texture2D( lightMap, vUv2 );
         reflectedLight.indirectDiffuse += lightMapTexelToLinear( lightMapTexel ).rgb * lightMapIntensity;
     #else
         reflectedLight.indirectDiffuse += vec3( 1.0 );
     #endif
-    // modulation
     #include <aomap_fragment>
     reflectedLight.indirectDiffuse *= diffuseColor.rgb;
     vec3 outgoingLight = reflectedLight.indirectDiffuse;
+
+    if ( shadowActive > 0.0 && vShadowCoord.w > 0.0 ) {
+        vec3 shadowCoord = vShadowCoord.xyz / vShadowCoord.w;
+
+        if ( all( greaterThanEqual( shadowCoord, vec3( 0.0 ) ) ) && all( lessThanEqual( shadowCoord, vec3( 1.0 ) ) ) )
+            outgoingLight *= 1.0 - texture2D( shadowMap, shadowCoord.xy ).a * shadowDarkness;
+    }
     #include <envmap_fragment>
     #include <output_fragment>
     #include <tonemapping_fragment>
@@ -75,21 +81,4 @@ void main() {
     #include <fog_fragment>
     #include <premultiplied_alpha_fragment>
     #include <dithering_fragment>
-
-    // #ifdef USE_MAP_SPECULAR
-    // // gl_FragColor = vec4(vUvSpecular.x, vUvSpecular.y, 0.0, 1.0);
-    // // vec4 texelSpecular = texture2D(mapSpecular, vUv).aaaa;
-    // // gl_FragColor = vec4(specularColor.rgb, 1.0);
-    // #endif
-
-    // gl_FragColor = vec4(texture2D(shDiffuse.map.texture, vUv).rgb, 1.0);
-
-    // gl_FragColor = vec4(vUv, 0.0, 1.0);
-
-    // gl_FragColor = vec4(vVertexIndex / float(VERTEX_COUNT), 0.0, 0.0, 1.0);
-
-    // gl_FragColor = vec4(vUv[MASK_UV_INDEX], 0.0, 1.0);
-    // gl_FragColor = addLayer(vec4(texture2D(layer1.map.texture, vUv[MASK_UV_INDEX]).rgb, 1.0), texelDiffuse) * texture2D(layer0.alphaMap.texture, vUv[MASK_UV_INDEX]).r;
-
-    // gl_FragColor = vec4(vColor, 1.0);
 }

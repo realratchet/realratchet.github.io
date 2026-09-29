@@ -11,7 +11,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             : ["style-loader"])
             .concat([
                 { loader: "css-loader", options: { url: false } },
-                "sass-loader",
+                { loader: "sass-loader", options: { api: "modern" } },
             ]);
 
         const plugins = [];
@@ -64,8 +64,11 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                     ]
                 ],
                 plugins: [
+                    ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                     "@babel/transform-runtime",
-                    "@babel/plugin-proposal-class-properties"
+                    ["@babel/plugin-proposal-class-properties", { "loose": true }],
+                    ["@babel/plugin-proposal-private-methods", { "loose": true }],
+                    ["@babel/plugin-proposal-private-property-in-object", { "loose": true }]
                 ]
             }
         }, {
@@ -87,8 +90,11 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                     ]
                 ],
                 plugins: [
+                    ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                     "@babel/transform-runtime",
-                    "@babel/plugin-proposal-class-properties"
+                    ["@babel/plugin-proposal-class-properties", { "loose": true }],
+                    ["@babel/plugin-proposal-private-methods", { "loose": true }],
+                    ["@babel/plugin-proposal-private-property-in-object", { "loose": true }]
                 ]
             }
         });
@@ -143,7 +149,8 @@ module.exports.createConfigBundle = createModuleConfig({
         extensions: [".tsx", ".ts", ".js"],
         alias: {
             "@client": path.resolve(__dirname, "../src"),
-            "@unreal": path.resolve(__dirname, "../src/assets/unreal")
+            "@unreal": path.resolve(__dirname, "../src/assets/unreal"),
+            "@l2js/engine": path.resolve(__dirname, "../src/assets/unreal")
         }
     },
     entry: "../src/index.ts"

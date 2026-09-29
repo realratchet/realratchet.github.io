@@ -9,3 +9,4 @@ cpp/l2_editor/
 *.log
 asset-list.json
 .env
+tools/*

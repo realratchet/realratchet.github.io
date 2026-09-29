@@ -1,17 +1,19 @@
-import { ShaderMaterial, Uniform, Color, Matrix3, DoubleSide, DataTexture, RGFormat, OneFactor, CustomBlending } from "three";
+import { ShaderMaterial, Uniform, Color, Matrix3, FrontSide, DataTexture, RGFormat, OneFactor, CustomBlending, LinearFilter } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-terrain.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
+import type { IDecodedParameter } from "@l2js/engine/contracts/material";
+import type { MapData_T } from "@l2js/engine/contracts/texture";
 
-class MeshTerrainMaterial extends ShaderMaterial {
+export class MeshTerrainMaterial extends ShaderMaterial {
     // @ts-ignore
     constructor(info: MeshTerrainMaterialParameters) {
         const defines: Record<string, any> = {
             USE_FOG: "",
             USE_UV_TEXTURE: "",
-            UV_COUNT: info.uvs.size.height,
-            MASK_UV_INDEX: info.uvs.size.height - 1
+            UV_COUNT: info.uvs.size.y,
+            MASK_UV_INDEX: info.uvs.size.y - 1
         };
 
         const uniforms: Record<string, Uniform> = appendGlobalUniforms({
@@ -29,10 +31,10 @@ class MeshTerrainMaterial extends ShaderMaterial {
         const pragmaSearch = "#pragma include_layers";
 
         const paramsIndex = splitFragmentShader.findIndex(x => x.includes(pragmaSearchParams));
-        const wsParams = new Array(splitFragmentShader[paramsIndex].indexOf(pragmaSearchParams)).fill(" ").join("");
+        const wsParams = " ".repeat(splitFragmentShader[paramsIndex].indexOf(pragmaSearchParams));
 
         let layerIndex = splitFragmentShader.findIndex(x => x.includes(pragmaSearch));
-        const ws = new Array(splitFragmentShader[layerIndex].indexOf(pragmaSearch)).fill(" ").join("");
+        const ws = " ".repeat(splitFragmentShader[layerIndex].indexOf(pragmaSearch));
 
         const paramsCode: string[] = [], layerCode: string[] = [];
 
@@ -43,6 +45,7 @@ class MeshTerrainMaterial extends ShaderMaterial {
 
         info.layers.forEach((layer, i) => {
             if (!layer.map) return;
+            if (!layer.alphaMap) return;
 
             needsPreamble = true;
 
@@ -51,23 +54,18 @@ class MeshTerrainMaterial extends ShaderMaterial {
             defines[`USE_LAYER_${i}`] = "";
 
 
-            if (layer.alphaMap) {
-                needsOpacityPreamble = true;
-                defines[`USE_LAYER_${i}_OPACITY`] = "";
+            needsOpacityPreamble = true;
+            defines[`USE_LAYER_${i}_OPACITY`] = "";
 
-                layerCode.push(`${ws}layerMask = texture2D(layer${i}.alphaMap.texture, vUv[MASK_UV_INDEX]);`);
-                paramsCode.push(`${wsParams}uniform MaskedLayerData layer${i};`);
+            layerCode.push(`${ws}layerMask = texture2D(layer${i}.alphaMap.texture, vUv[MASK_UV_INDEX]);`);
+            paramsCode.push(`${wsParams}uniform MaskedLayerData layer${i};`);
 
-                Object.assign(u.value.alphaMap, layer.alphaMap.uniforms.map);
-                layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
-                layer.alphaMap.uniforms.map.texture.needsUpdate = true;
-            } else {
-                layerCode.push(`${ws}layerMask = vec4(1.0);`);
-                paramsCode.push(`${wsParams}uniform LayerData layer${i};`);
-            }
+            Object.assign(u.value.alphaMap, layer.alphaMap.uniforms.map);
+            layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
+            layer.alphaMap.uniforms.map.texture.needsUpdate = true;
 
-            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i}]).rgb, layerMask.r);`)
-            if (!isFirst) {
+            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i + 1}]).rgb, layerMask.r);`)
+            if (isFirst) {
                 layerCode.push(`${ws}texelDiffuse = addLayer(layer, texelDiffuse);`);
             } else {
                 layerCode.push(`${ws}texelDiffuse = layer;`);
@@ -118,13 +116,13 @@ class MeshTerrainMaterial extends ShaderMaterial {
             defines,
             uniforms,
             vertexShader: VERTEX_SHADER,
-            fragmentShader: fragmentShader
+            fragmentShader: fragmentShader,
+            side: FrontSide
         });
     }
 }
 
 export default MeshTerrainMaterial;
-export { MeshTerrainMaterial };
 
 type MeshTerrainMaterialParameters = {
     uvs: MapData_T,

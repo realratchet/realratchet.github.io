@@ -1,75 +1,121 @@
+import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format } from "three";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
-import { CompressedTexture, LinearFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, LinearMipmapLinearFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, LinearMipmapNearestFilter, NearestFilter, Vector2, DataTexture, PixelFormat, RGBAFormat, RGFormat, FloatType, UVMapping, RedFormat, RGBFormat, TextureLoader, CanvasTexture } from "three";
+import type { DecodeLibrary } from "@l2js/engine";
+import type { TextureClampMode_T, DataTextureFormats_T, IDataTextureDecodeInfo, ITextureDecodeInfo, MapData_T } from "@l2js/engine/contracts/texture";
+import WetWaterTexture from "../../materials/wet-water-texture";
+import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@l2js/engine/dds/dxt-decode";
 
-function getClamping(mode: number): THREE.Wrapping {
-    switch (mode) {
-        case 1024: return RepeatWrapping;
-        case 512: return RepeatWrapping;
-        case 256: return MirroredRepeatWrapping;
-        case 128: return RepeatWrapping;
-        case 64: return RepeatWrapping;
-        case 32: return RepeatWrapping;
-        default:
-            console.warn(`Unknown clamping mode: ${mode}`);
-            return ClampToEdgeWrapping;
-    }
+function getClamping(mode: TextureClampMode_T): THREE.Wrapping {
+    return mode === "clamp" ? ClampToEdgeWrapping : RepeatWrapping;
 }
 
 function getFormat(type: DataTextureFormats_T) {
     if (typeof type !== "string")
         return RGBAFormat;
 
+    // const RGBFormat = 1022;
+
     switch (type) {
         case "r": return RedFormat;
         case "rg": return RGFormat;
-        case "rgb": return RGBFormat;
+        case "rgb": return RGBAFormat;
         case "rgba": return RGBAFormat;
         default: throw new Error(`Unsupported texture format: ${type}`);
     }
 }
 
-const decodePNG = (function () {
-    const texLoader = new TextureLoader();
+// Uploads the DDS mip chain as an S3TC CompressedTexture. Our DDS header never sets
+// the alpha flag so DDSLoader reports DXT1 as RGB - force the RGBA variant which
+// decodes DXT1's 1-bit alpha correctly (identical block data).
+function decodeCompressedDDS(buffer: ArrayBuffer): THREE.Texture {
+    const dds = new DDSLoader().parse(buffer, true);
+    const format = dds.format === RGB_S3TC_DXT1_Format ? RGBA_S3TC_DXT1_Format : dds.format;
+    const texture = new CompressedTexture(dds.mipmaps as ImageData[], dds.width, dds.height, format as THREE.CompressedPixelFormat);
 
-    return function decodePNG(buffer: ArrayBuffer): THREE.Texture {
-        const blob = new Blob([buffer], { type: "image/png" });
-        const url = URL.createObjectURL(blob);
+    texture.minFilter = dds.mipmapCount === 1 ? LinearFilter : LinearMipmapLinearFilter;
+    texture.magFilter = LinearFilter;
+    texture.flipY = false;
+    texture.needsUpdate = true;
 
-        return texLoader.load(url, function (texture) {
-            texture.flipY = false;
+    return texture;
+}
 
-            URL.revokeObjectURL(url);
-        }, undefined, function (err) {
-            URL.revokeObjectURL(url);
-        });
+// Replaced CompressedTexture with DataTexture (Software Decode) to fix Alpha Issues
+function decodeDDS(buffer: ArrayBuffer, preferCompressed: boolean = false): THREE.Texture {
+    if (preferCompressed) {
+        try {
+            return decodeCompressedDDS(buffer);
+        } catch (e) {
+            console.warn("[decodeDDS] compressed upload failed, falling back to software decode:", e);
+        }
     }
-})();
 
-const decodeDDS = (function () {
+    // 1. Try Manual Software Decompression (Matches B64 Export Logic)
+    try {
+        const header = new Int32Array(buffer, 0, 31);
+        const height = header[3];
+        const width = header[4];
+        const fourCC = header[21];
+        const dataOffset = 128; // DDS header size
+
+        let rgbaData: Uint8Array | null = null;
+        const input = new Uint8Array(buffer, dataOffset);
+
+        if (fourCC === 0x31545844) { // DXT1
+            rgbaData = dxt1ToRgba(width, height, input);
+        } else if (fourCC === 0x33545844) { // DXT3
+            rgbaData = dxt3ToRgba(width, height, input);
+        } else if (fourCC === 0x35545844) { // DXT5
+            rgbaData = dxt5ToRgba(width, height, input);
+        }
+
+        if (rgbaData) {
+            const texture = new DataTexture(rgbaData, width, height, RGBAFormat);
+            texture.flipY = false;
+            texture.generateMipmaps = true;
+            texture.minFilter = LinearMipmapLinearFilter;
+            texture.magFilter = LinearFilter;
+            texture.needsUpdate = true;
+            return texture;
+        }
+    } catch (e) {
+        console.warn("[decodeDDS] Software Decode Failed, falling back to DDSLoader", e);
+    }
+
+    // 2. Fallback to Original DDSLoader (CompressedTexture)
     const ddsLoader = new DDSLoader();
+    const dds = ddsLoader.parse(buffer, true);
+    const { mipmaps, width, height, format: _format, mipmapCount } = dds;
+    const texture = new CompressedTexture(mipmaps as ImageData[], width, height, _format as THREE.CompressedPixelFormat);
 
-    return function decodeDDS(buffer: ArrayBuffer): THREE.CompressedTexture {
-        const dds = ddsLoader.parse(buffer, true);
-        const { mipmaps, width, height, format: _format, mipmapCount } = dds;
-        const texture = new CompressedTexture(mipmaps as ImageData[], width, height, _format as THREE.CompressedPixelFormat);
+    if (mipmapCount === 1) texture.minFilter = LinearFilter;
 
-        if (mipmapCount === 1) texture.minFilter = LinearFilter;
-        // texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
+    texture.needsUpdate = true;
+    texture.flipY = false;
 
-        // debugger;
-
-        texture.needsUpdate = true;
-        texture.flipY = false;
-
-        return texture;
-    };
-})();
+    return texture;
+}
 
 function decodeRGBA(info: IDataTextureDecodeInfo): DataTexture {
-    const image = new Uint8Array(info.buffer, 0, info.width * info.height * 4);
+    const byteLength = info.width * info.height * 4;
+
+    if (info.buffer.byteLength < byteLength) {
+        // bad/unsupported texture data must not kill the whole sector
+        console.warn(`Texture '${info.name}' has ${info.buffer.byteLength} bytes, expected ${byteLength} - using placeholder`);
+
+        const placeholder = new DataTexture(new Uint8Array([255, 0, 255, 255]), 1, 1);
+
+        placeholder.needsUpdate = true;
+
+        return placeholder;
+    }
+
+    const image = new Uint8Array(info.buffer, 0, byteLength);
     const texture = new DataTexture(image, info.width, info.height, getFormat(info.format));
 
-    texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
+    texture.generateMipmaps = true;
+    texture.minFilter = LinearMipmapLinearFilter;
+    texture.magFilter = LinearFilter;
 
     texture.flipY = false;
     texture.needsUpdate = true;
@@ -100,12 +146,10 @@ function decodeFloat(info: IDataTextureDecodeInfo): DataTexture {
         info.width, info.height,
         getFormat(info.format),
         FloatType,
-        // UVMapping,
-        // ClampToEdgeWrapping,
-        // ClampToEdgeWrapping,
-        // LinearFilter,
-        // LinearFilter
     );
+
+    texture.minFilter = NearestFilter;
+    texture.magFilter = NearestFilter;
 
     // debugger;
 
@@ -115,26 +159,85 @@ function decodeFloat(info: IDataTextureDecodeInfo): DataTexture {
     return texture;
 }
 
-function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData_T {
+export function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData_T {
     let texture: THREE.Texture;
 
     switch (info.textureType) {
-        case "dds": texture = decodeDDS(info.buffer); break;
+        case "dds": texture = decodeDDS(info.buffer, (library as any).preferCompressedTextures === true); break;
+        case "wet": texture = new WetWaterTexture(info as any); break;
         case "rgba": texture = decodeRGBA(info); break;
         case "g16": texture = decodeG16(info); break;
         case "float": texture = decodeFloat(info); break;
-        case "png": texture = decodePNG(info.buffer); break;
         default: throw new Error(`Unsupported texture format: ${info.textureType}`);
     }
 
-    if (info.wrapS) texture.wrapS = getClamping(info.wrapS);
-    if (info.wrapT) texture.wrapT = getClamping(info.wrapT);
+    texture.wrapS = info.wrapS ? getClamping(info.wrapS) : RepeatWrapping;
+    texture.wrapT = info.wrapT ? getClamping(info.wrapT) : RepeatWrapping;
 
     if (info.name) texture.name = info.name;
     if (library.anisotropy >= 0) texture.anisotropy = library.anisotropy;
 
-    return { texture, size: new Vector2(info.width, info.height) };
+    const width = texture.image?.width ?? (texture as any).width ?? 1;
+    const height = texture.image?.height ?? (texture as any).height ?? 1;
+
+    return { texture, size: new Vector2(width, height) };
+}
+
+
+export function decodeTextureAsB64(info: ITextureDecodeInfo): string | null {
+    let rgbaData: Uint8Array | null = null;
+    let width = 1, height = 1;
+
+    try {
+        if (info.textureType === "dds") {
+            const header = new Int32Array(info.buffer, 0, 31);
+            height = header[3];
+            width = header[4];
+            const fourCC = header[21];
+
+            const dataOffset = 128; // DDS header size
+            const input = new Uint8Array(info.buffer, dataOffset);
+
+            if (fourCC === 0x31545844) { // DXT1
+                rgbaData = dxt1ToRgba(width, height, input);
+            } else if (fourCC === 0x33545844) { // DXT3
+                rgbaData = dxt3ToRgba(width, height, input);
+            } else if (fourCC === 0x35545844) { // DXT5
+                rgbaData = dxt5ToRgba(width, height, input);
+            } else {
+                console.warn(`Unsupported DDS FourCC for B64 decode: ${fourCC}`);
+                return null;
+            }
+
+        } else if (info.textureType === "rgba") {
+            const dataInfo = info as IDataTextureDecodeInfo;
+            if (dataInfo.format === 'rgba' || !dataInfo.format) {
+                width = dataInfo.width;
+                height = dataInfo.height;
+                rgbaData = new Uint8Array(info.buffer);
+            }
+        }
+
+        if (rgbaData) {
+            if (typeof document === 'undefined') return "no-document-context";
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return null;
+
+            const imageData = ctx.createImageData(width, height);
+            imageData.data.set(rgbaData);
+            ctx.putImageData(imageData, 0, 0);
+
+            return canvas.toDataURL();
+        }
+
+    } catch (e) {
+        console.error("Failed to decode texture to B64", e);
+    }
+    return null;
 }
 
 export default decodeTexture;
-export { decodeTexture };

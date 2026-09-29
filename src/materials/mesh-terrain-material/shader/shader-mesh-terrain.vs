@@ -7,6 +7,9 @@
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
 
+uniform mat4 shadowMatrix;
+varying vec4 vShadowCoord;
+
 // gl_VertexID (vertex index)
 
 // varying float vVertexIndex;
@@ -70,6 +73,7 @@
     uniform sampler2D tex;
     
     varying vec2 vUv[UV_COUNT];
+    attribute float terrainIndex;
 #endif
 
 void main() {
@@ -120,6 +124,7 @@ void main() {
     #include <begin_vertex>
     #include <morphtarget_vertex>
     #include <skinning_vertex>
+    vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
     #include <project_vertex>
     #include <logdepthbuf_vertex>
     #include <clipping_planes_vertex>
@@ -128,12 +133,11 @@ void main() {
     #include <fog_vertex>
 
     #ifdef USE_UV_TEXTURE
-        float u = float(gl_VertexID) / (uvs.size.x - 1.0);
-        float fCountUv = uvs.size.y - 1.0;
-        
+        float u = (terrainIndex + 0.5) / uvs.size.x;
+
         #pragma unroll_loop_start
         for(int i = 0; i < UV_COUNT; i++) {
-            float v = float(i) / fCountUv;
+            float v = (float(i) + 0.5) / float(uvs.size.y);
 
             vUv[i] = (uvTransform * vec3(texture2D(uvs.texture, vec2(u, v)).xy, 1.0)).xy;
         }
