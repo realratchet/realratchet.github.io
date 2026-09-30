@@ -280,7 +280,7 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
 
     const mergedPositions = new Float32Array(totalVertices * 3);
     const mergedNormals = new Float32Array(totalVertices * 3);
-    const mergedColors = new Uint8ClampedArray(totalVertices * 3);
+    const mergedColors = new Float32Array(totalVertices * 3); // float, not bytes - see Terrain.getLightingBytes
     const mergedTerrainIndices = new Float32Array(totalVertices);
     const mergedIndices = new Uint32Array(totalIndices);
 
@@ -311,6 +311,7 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
         const posArray = pos.array as any;
         const normArray = norm ? norm.array as any : null;
         const colorArray = color ? color.array as any : null;
+        const colorScale = color?.normalized ? 1 / 255 : 1;
         const terrainIndexArray = terrainIndex ? terrainIndex.array as any : null;
 
         // Copy and shift data
@@ -328,9 +329,9 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
             }
 
             if (colorArray) {
-                mergedColors[vi * 3 + 0] = colorArray[i * 3 + 0];
-                mergedColors[vi * 3 + 1] = colorArray[i * 3 + 1];
-                mergedColors[vi * 3 + 2] = colorArray[i * 3 + 2];
+                mergedColors[vi * 3 + 0] = colorArray[i * 3 + 0] * colorScale;
+                mergedColors[vi * 3 + 1] = colorArray[i * 3 + 1] * colorScale;
+                mergedColors[vi * 3 + 2] = colorArray[i * 3 + 2] * colorScale;
             }
 
             if (terrainIndexArray) {
@@ -360,7 +361,7 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
     const mergedGeometry = new BufferGeometry();
     mergedGeometry.setAttribute("position", new BufferAttribute(mergedPositions, 3));
     mergedGeometry.setAttribute("normal", new BufferAttribute(mergedNormals, 3));
-    mergedGeometry.setAttribute("color", new BufferAttribute(mergedColors, 3, true));
+    mergedGeometry.setAttribute("color", new BufferAttribute(mergedColors, 3));
     mergedGeometry.setAttribute("terrainIndex", new BufferAttribute(mergedTerrainIndices, 1));
     mergedGeometry.setIndex(new BufferAttribute(mergedIndices, 1));
 

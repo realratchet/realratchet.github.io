@@ -729,7 +729,8 @@ export abstract class BaseEmitter extends Object3D {
 
                     let meshColor = new Vector3().fromBufferAttribute(attrColors, vertexIndex);
 
-                    if (attrColors.normalized) meshColor.multiplyScalar(255);
+                    // vertex colors arrive as 0..1 (float attribute, or normalized bytes which getX denormalizes) - UE2 wants bytes
+                    meshColor.multiplyScalar(255);
 
                     particle.colorMultiplier.x = meshColor.x;
                     particle.colorMultiplier.y = meshColor.y;

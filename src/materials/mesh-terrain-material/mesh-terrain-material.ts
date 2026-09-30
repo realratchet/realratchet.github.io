@@ -22,7 +22,10 @@ export class MeshTerrainMaterial extends ShaderMaterial {
             opacity: new Uniform(1),
             uvTransform: new Uniform(new Matrix3()),
             transformSpecular: new Uniform(null),
-            uvs: new Uniform(info.uvs)
+            uvs: new Uniform(info.uvs),
+            // samplers stay out of the GLSL structs: ANGLE's Metal backend binds sampler2D struct members
+            // to the wrong texture units, so uvs/layerN carry only the texel size
+            uvsMap: new Uniform(info.uvs.texture)
         });
 
         const splitFragmentShader = FRAGMENT_SHADER.split("\n");
@@ -57,14 +60,19 @@ export class MeshTerrainMaterial extends ShaderMaterial {
             needsOpacityPreamble = true;
             defines[`USE_LAYER_${i}_OPACITY`] = "";
 
-            layerCode.push(`${ws}layerMask = texture2D(layer${i}.alphaMap.texture, vUv[MASK_UV_INDEX]);`);
+            layerCode.push(`${ws}layerMask = texture2D(layer${i}AlphaMap, vUv[MASK_UV_INDEX]);`);
             paramsCode.push(`${wsParams}uniform MaskedLayerData layer${i};`);
+            paramsCode.push(`${wsParams}uniform sampler2D layer${i}Map;`);
+            paramsCode.push(`${wsParams}uniform sampler2D layer${i}AlphaMap;`);
+
+            uniforms[`layer${i}Map`] = new Uniform(layer.map.uniforms.map.texture);
+            uniforms[`layer${i}AlphaMap`] = new Uniform(layer.alphaMap.uniforms.map.texture);
 
             Object.assign(u.value.alphaMap, layer.alphaMap.uniforms.map);
             layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
             layer.alphaMap.uniforms.map.texture.needsUpdate = true;
 
-            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i + 1}]).rgb, layerMask.r);`)
+            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}Map, vUv[${i + 1}]).rgb, layerMask.r);`)
             if (isFirst) {
                 layerCode.push(`${ws}texelDiffuse = addLayer(layer, texelDiffuse);`);
             } else {
@@ -82,7 +90,6 @@ export class MeshTerrainMaterial extends ShaderMaterial {
         if (needsPreamble) {
             const preamble = [
                 `${wsParams}struct TextureData {`,
-                `${wsParams}    sampler2D texture;`,
                 `${wsParams}    vec2 size;`,
                 `${wsParams}};`,
                 "",

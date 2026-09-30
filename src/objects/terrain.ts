@@ -12,6 +12,26 @@ const tmpNormal = new Vector3();
 const cbAmbient = new ColorByte();
 const cbLight = new ColorByte();
 
+// CPU-side byte accumulator per (possibly batched) color attribute. The GPU attribute itself is float:
+// 3-byte vertex strides are converted driver-side on ANGLE's Metal backend, floats are not.
+const lightingBytesByGeometry = new WeakMap<THREE.BufferGeometry, Uint8ClampedArray>();
+
+function getLightingBytes(geometry: THREE.BufferGeometry, attrColors: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): Uint8ClampedArray {
+    let bytes = lightingBytesByGeometry.get(geometry);
+
+    if (!bytes || bytes.length !== attrColors.array.length) {
+        const source = attrColors.array as ArrayLike<number>;
+        const scale = attrColors.normalized ? 1 : 255;
+
+        bytes = new Uint8ClampedArray(source.length);
+        for (let i = 0; i < bytes.length; i++) bytes[i] = source[i] * scale;
+
+        lightingBytesByGeometry.set(geometry, bytes);
+    }
+
+    return bytes;
+}
+
 export class Terrain extends GameMesh {
     protected collisionRadius: number;
 
@@ -127,7 +147,7 @@ export class Terrain extends GameMesh {
 
         const targetGeometry = this.batchGeometry || this.geometry;
         const attrColors = targetGeometry.getAttribute("color");
-        const colorArray = attrColors.array as Uint8ClampedArray;
+        const colorArray = getLightingBytes(targetGeometry, attrColors);
         const vertexCount = this.geometry.getAttribute("position").count;
         const colorOffset = this.batchVertexOffset * 3;
 
@@ -180,6 +200,11 @@ export class Terrain extends GameMesh {
         const dynamicLights = lights.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
         if (dynamicLights.length > 0) {
             this.computeLighting(dynamicLights, colorArray, false);
+        }
+
+        if (attrColors.array instanceof Float32Array) {
+            const floats = attrColors.array;
+            for (let i = colorOffset, end = colorOffset + vertexCount * 3; i < end; i++) floats[i] = colorArray[i] * (1 / 255);
         }
 
         attrColors.needsUpdate = true;

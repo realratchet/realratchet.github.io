@@ -16,6 +16,7 @@ type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpe
 type ApplyParams_T = {
     name: SupportedShaderParams_T,
     sprites: Record<string, SpriteParam_T>,
+    maps: THREE.Texture[],
     parameters: IDecodedParameter,
     uniforms: Record<string, Uniform>,
     defines: Record<string, any>
@@ -26,7 +27,7 @@ type SpriteParam_T = {
     sprites: any[]
 }
 
-function applyParameters({ name, parameters, uniforms, defines, sprites }: ApplyParams_T): void {
+function applyParameters({ name, parameters, uniforms, defines, sprites, maps }: ApplyParams_T): void {
 
     let defName;
 
@@ -67,6 +68,11 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 
         defines["USE_UV"] = "";
         defines[`USE_MAP_${defName}`] = "";
+
+        // the sampler is a top-level uniform (shDiffuseMap etc.) - ANGLE's Metal backend binds sampler2D
+        // struct members to the wrong texture units, the struct keeps only the texel size
+        uniforms[`${name}Map`].value = parameters.uniforms.map.texture;
+        maps.push(parameters.uniforms.map.texture);
 
         if (parameters.uvIndex === 1) {
             defines["USE_UV2"] = "";
@@ -115,6 +121,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         // debugger;
 
         const sprites = {};
+        const maps: THREE.Texture[] = [];
 
         const defines: Record<string, any> = { USE_FOG: "" };
 
@@ -144,6 +151,13 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 shDetail: new Uniform(null),
                 shMaterial2: new Uniform(null),
 
+                shDiffuseMap: new Uniform(null),
+                shOpacityMap: new Uniform(null),
+                shSpecularMap: new Uniform(null),
+                shSpecularMaskMap: new Uniform(null),
+                shDetailMap: new Uniform(null),
+                shMaterial2Map: new Uniform(null),
+
                 ambient: new Uniform({
                     color: new Color(1, 1, 1),
                     brightness: 1
@@ -163,6 +177,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             applyParameters({
                 name,
                 sprites,
+                maps,
                 defines,
                 uniforms,
                 parameters
@@ -272,10 +287,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.sprites = sprites;
         this.spriteEntries = Object.entries(sprites);
 
-        // procedural maps (water) drive their own animation through update()
-        this.proceduralMaps = Object.values(uniforms)
-            .map((u: any) => u?.value)
-            .filter((v: any) => v?.isTexture && v.isUpdatable);
+        // procedural maps (water) drive their own animation through update(); registered explicitly by
+        // applyParameters so this doesn't depend on which uniforms happen to hold the textures
+        this.proceduralMaps = maps.filter((map: any) => map?.isUpdatable);
 
         this.isUpdatable = this.spriteEntries.length > 0 || this.proceduralMaps.length > 0;
 
@@ -499,6 +513,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             const activeFrame = sprites[activeFrameIndex];
 
             uniform.value.map = activeFrame;
+            this.uniforms[`${k}Map`].value = activeFrame.texture;
         }
     }
 }

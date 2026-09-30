@@ -45,6 +45,7 @@ export class LitActorMesh extends GameMesh {
     protected scaledGlow: number;
     protected isSunAffected: boolean;
     protected staticLightingCache?: Uint8ClampedArray;
+    protected lightingBytes?: Uint8ClampedArray; // CPU-side byte accumulator behind the float "lighting" attribute
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean };
 
     public isBatch?: boolean;
@@ -87,18 +88,14 @@ export class LitActorMesh extends GameMesh {
                     : [this.material]
             ).forEach(mat => (mat as any)?.setLit?.());
 
-            this.geometry.setAttribute(
-                "lighting",
-                new BufferAttribute(
-                    new Uint8ClampedArray(attrPositions.count * 3),
-                    3,
-                    true
-                )
-            );
+            // the lighting math stays in bytes (lightingBytes) but the GPU gets 4-byte-aligned floats:
+            // 3- and 1-byte vertex strides are converted driver-side on ANGLE's Metal backend
+            this.lightingBytes = new Uint8ClampedArray(attrPositions.count * 3);
+            this.geometry.setAttribute("lighting", new BufferAttribute(new Float32Array(attrPositions.count * 3), 3));
 
-            const sunAffected = new Uint8Array(attrPositions.count);
-            if (this.isSunAffected) sunAffected.fill(255);
-            this.geometry.setAttribute("sunAffected", new BufferAttribute(sunAffected, 1, true));
+            const sunAffected = new Float32Array(attrPositions.count);
+            if (this.isSunAffected) sunAffected.fill(1);
+            this.geometry.setAttribute("sunAffected", new BufferAttribute(sunAffected, 1));
         }
     }
 
@@ -108,12 +105,14 @@ export class LitActorMesh extends GameMesh {
         const attrSunAffected = this.geometry.getAttribute("sunAffected");
         if (!attrSunAffected) return;
 
-        const arrSunAffected = attrSunAffected.array as Uint8Array;
+        const arrSunAffected = attrSunAffected.array as Float32Array;
         arrSunAffected.fill(0);
 
         for (const actor of perActorAmbient)
             if (actor.isSunAffected)
-                arrSunAffected.fill(255, actor.startVertex, actor.startVertex + actor.count);
+                arrSunAffected.fill(1, actor.startVertex, actor.startVertex + actor.count);
+
+        attrSunAffected.needsUpdate = true;
     }
 
     protected perVertexGlow?: Float32Array;
@@ -299,7 +298,7 @@ export class LitActorMesh extends GameMesh {
 
 
         const attrColors = this.geometry.getAttribute("lighting");
-        const colorArray = attrColors.array as Uint8ClampedArray;
+        const colorArray = this.lightingBytes!;
 
         let staticCacheDirty = !this.staticLightingCache || this.staticLightingCache.length !== colorArray.length;
 
@@ -451,6 +450,10 @@ export class LitActorMesh extends GameMesh {
             rangeOffset = minVertex * 3;
             rangeCount = (maxVertex - minVertex) * 3;
         } else if (this.elemRelight) this.elemRelight.fill(0);
+
+        const lightingFloats = attrColors.array as Float32Array;
+        for (let i = rangeOffset, end = rangeCount === -1 ? colorArray.length : rangeOffset + rangeCount; i < end; i++)
+            lightingFloats[i] = colorArray[i] * (1 / 255);
 
         attrColors.updateRange.offset = rangeOffset;
         attrColors.updateRange.count = rangeCount;

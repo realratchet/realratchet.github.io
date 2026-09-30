@@ -63,14 +63,14 @@ varying vec4 vShadowCoord;
 // #endif
 
 #ifdef USE_UV_TEXTURE
+    // sampler kept out of the struct: ANGLE's Metal backend mis-maps sampler2D members of struct uniforms
     struct TextureData {
-        sampler2D texture;
         vec2 size;
     };
 
     uniform TextureData uvs;
+    uniform sampler2D uvsMap;
     uniform mat3 uvTransform;
-    uniform sampler2D tex;
     
     varying vec2 vUv[UV_COUNT];
     attribute float terrainIndex;
@@ -139,7 +139,7 @@ void main() {
         for(int i = 0; i < UV_COUNT; i++) {
             float v = (float(i) + 0.5) / float(uvs.size.y);
 
-            vUv[i] = (uvTransform * vec3(texture2D(uvs.texture, vec2(u, v)).xy, 1.0)).xy;
+            vUv[i] = (uvTransform * vec3(texture2D(uvsMap, vec2(u, v)).xy, 1.0)).xy;
         }
         #pragma unroll_loop_end
     #endif

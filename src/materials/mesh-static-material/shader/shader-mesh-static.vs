@@ -36,8 +36,8 @@
 
 #if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK) || defined(USE_MAP_DETAIL))
     #if defined(USE_MAP_DIFFUSE_TRANSFORM) || defined(USE_MAP_OPACITY_TRANSFORM) || defined(USE_MAP_SPECULAR_TRANSFORM) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM) || defined(USE_MAP_DETAIL_TRANSFORM)
+        // no sampler member - must match the fragment shader's TextureData (see shader-mesh-static.fs)
         struct TextureData {
-            sampler2D texture;
             vec2 size;
         };
 

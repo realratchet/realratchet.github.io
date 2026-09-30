@@ -37,6 +37,18 @@ function getAttributeForTypedArray(IndexArrayConstructor: IndexTypedArray): Inde
     }
 }
 
+// byte colors are uploaded as floats: 3-byte vertex strides are converted driver-side on ANGLE's Metal backend
+function toFloatColors(colors: ArrayLike<number>): Float32Array {
+    if (colors instanceof Float32Array) return colors;
+
+    const scale = colors instanceof Uint8Array || colors instanceof Uint8ClampedArray ? 1 / 255 : 1;
+    const floats = new Float32Array(colors.length);
+
+    for (let i = 0; i < floats.length; i++) floats[i] = colors[i] * scale;
+
+    return floats;
+}
+
 function fetchGeometry(info: IGeometryDecodeInfo) {
     if (cacheGeometries.has(info)) return cacheGeometries.get(info);
 
@@ -51,8 +63,8 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
 
     if (info.attributes.normals) geometry.setAttribute("normal", new BufferAttribute(info.attributes.normals, 3));
     if (info.attributes.positions) geometry.setAttribute("position", new BufferAttribute(info.attributes.positions, 3));
-    if (info.attributes.colors) geometry.setAttribute("color", new BufferAttribute(info.attributes.colors, 3, info.attributes.colors instanceof Uint8Array || info.attributes.colors instanceof Uint8ClampedArray));
-    if (info.attributes.colorsInstance) geometry.setAttribute("colorInstance", new BufferAttribute(info.attributes.colorsInstance, 3, info.attributes.colorsInstance instanceof Uint8Array || info.attributes.colorsInstance instanceof Uint8ClampedArray));
+    if (info.attributes.colors) geometry.setAttribute("color", new BufferAttribute(toFloatColors(info.attributes.colors), 3));
+    if (info.attributes.colorsInstance) geometry.setAttribute("colorInstance", new BufferAttribute(toFloatColors(info.attributes.colorsInstance), 3));
     if (info.attributes.skinIndex) geometry.setAttribute("skinIndex", new BufferAttribute(info.attributes.skinIndex, 4));
     if (info.attributes.skinWeight) geometry.setAttribute("skinWeight", new BufferAttribute(info.attributes.skinWeight, 4));
     if (info.attributes.skinIndex2) geometry.setAttribute("skinIndex2", new BufferAttribute(info.attributes.skinIndex2, 4));
